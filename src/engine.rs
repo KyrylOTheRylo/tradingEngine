@@ -1,4 +1,51 @@
-#[derive(Debug, Hash)]
+use std::collections::HashMap;
+
+#[derive(Debug)]
+pub struct OrderBook {
+    asks: HashMap<Price, Limit>,
+    bids: HashMap<Price, Limit>,
+}
+
+impl OrderBook {
+    pub fn new() -> OrderBook {
+        OrderBook {
+            asks: HashMap::new(),
+            bids: HashMap::new(),
+        }}
+
+    fn add_order_from_price_in_bids_or_asks(&mut self, price: Price, order: Order, bid_or_ask: BidOrAsk)  {
+        let limit_map: &mut HashMap<Price, Limit> = match bid_or_ask {
+            BidOrAsk::Bid => &mut self.bids,
+            BidOrAsk::Ask => &mut self.asks,
+        };
+
+        match limit_map.get_mut(&price) {
+            Some(limit) => {
+                limit.add_order(order)
+            }
+            None => {
+                let mut lim: Limit = Limit::new(price);
+                lim.add_order(order);
+                limit_map.insert(price, lim);
+            }
+        }
+    }
+    pub fn add_order(&mut self,price: f64, order: Order) {
+        let price: Price= Price::new(price);
+        match order.bid_or_ask {
+            
+            BidOrAsk::Ask => {
+                self.add_order_from_price_in_bids_or_asks(price, order, order.bid_or_ask);
+                
+            },
+            BidOrAsk::Bid => {
+                self.add_order_from_price_in_bids_or_asks(price, order, order.bid_or_ask);
+            },
+            
+    }
+}}
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone, Copy)]
 pub struct Price {
     mantica: u64,
     integral:  u64,
@@ -6,13 +53,13 @@ pub struct Price {
 
     
 }
-#[derive(Debug, Hash)]
+#[derive(Debug, Hash, Clone, Copy)]
 pub enum BidOrAsk {
     Bid,
     Ask  
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Order {
     size: f64,
     bid_or_ask: BidOrAsk, 
