@@ -3,7 +3,7 @@ use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 mod orderbook;
 
 use orderbook::{Price, Limit, Order, BidOrAsk, OrderBook};
-mod order_matching_engine::engine;
+mod order_matching_engine::engine::{TradingPair, MatchEngine};
 
 
 #[get("/")]
