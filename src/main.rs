@@ -1,9 +1,10 @@
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 
-mod orderbook;
+mod order_matching_engine;
+use order_matching_engine::orderbook;
+use order_matching_engine::orderbook::{Order, Limit, Price, OrderBook, BidOrAsk};
 
-use orderbook::{Price, Limit, Order, BidOrAsk, OrderBook};
-mod order_matching_engine::engine::{TradingPair, MatchEngine};
+
 
 
 #[get("/")]
