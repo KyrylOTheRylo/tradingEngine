@@ -34,21 +34,21 @@ async fn main() -> std::io::Result<()> {
     let buy_ord: Order = Order::new(5.5, BidOrAsk::Ask);
     book.add_order(10.5, buy_ord ); 
 
-    let btc_usd: TradingPair = TradingPair::new(String::from("BTC"),String::from("USD"));
+    let btc_usd: TradingPair = TradingPair::new(String::from("BTC"),
+    String::from("USD"));
 
 
     let mut engine: MatchEngine = MatchEngine::new();
-    engine.add_new_market(btc_usd);
+    engine.add_new_market(btc_usd.clone());
 
-    let pair_wrong: TradingPair = TradingPair::new(String::from("USD"),String::from("Uah"));
-    println!("{:?}", engine.place_limit_order(pair_wrong, 10.5, buy_ord));
-
-
-
+    let pair_wrong: TradingPair = TradingPair::new(String::from("USD"),
+    String::from("UAH"));
+    engine.place_limit_order(pair_wrong, 10.5, buy_ord).unwrap();
 
 
 
-    println!("{:?}", book);
+    println!("{:?}", engine);
+
     HttpServer::new(|| {
         App::new()
             .service(hello)
