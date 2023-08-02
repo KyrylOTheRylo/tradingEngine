@@ -93,26 +93,38 @@ impl Price {
 pub struct Limit {
     price: Price,
     orders: Vec<Order>,
+    total_volume: f64,
 
 }
 
 impl Limit {        
     pub fn new(price: Price) -> Limit { 
+        let total_volume: f64 = 0.0;
         Limit{
+            
             price,
             orders: Vec::new(), 
+            total_volume,
         }}
+    
+    
 
     pub fn fill_order(&mut self, market_order: &mut Order) {
-        for limit_order in self.orders.iter_mut() {
+        let mut delete_order: Vec<usize> = Vec::new();
+
+        for (n, limit_order) in self.orders.iter_mut().enumerate() {
             match market_order.size  >= limit_order.size {
                 true => {
-                    market_order.size -= limit_order.size;
+                    market_order.size -= &limit_order.size;
+                    self.total_volume -= &limit_order.size;
                     limit_order.size = 0.0;
+                    delete_order.push(n);
+
 
                 },
                 false => {
                     limit_order.size -= market_order.size;
+                    self.total_volume -= market_order.size;
                     market_order.size = 0.0;
                 }
             }
@@ -120,16 +132,19 @@ impl Limit {
             if market_order.is_filled() {
                 break;
             }
-    }}
+
+    }
+    }
     pub fn add_order(&mut self, order: Order) {
         self.orders.push(order);
+        self.total_volume += order.size;
         
     }
 
 }
 
-#[cfg(tests)]
-pub mod tests {
+#[cfg(test)]
+pub mod test {
     use super::*;
 
     #[test]
@@ -137,11 +152,19 @@ pub mod tests {
         let price = Price::new(1000.0);
         let mut limit = Limit::new(price) ;
     
-        let buy_limit_order = Order::new(BidOrAsk::Bid, 100.0);
-        let market_sell_order = Order::new(BidOrAsk::Ask, 99.0);
+        let buy_limit_order1 =
+         Order::new( 50.0, BidOrAsk::Bid);
+        let buy_limit_order2 =
+         Order::new( 48.0, BidOrAsk::Bid);
+        
+        let mut  market_sell_order =
+         Order::new( 51.0, BidOrAsk::Ask);
+        limit.add_order(buy_limit_order1);
+        limit.add_order(buy_limit_order2);
+
 
         limit.fill_order(&mut market_sell_order);
-        println!(":?", limit)
+        println!("{:?}", limit);
     }
     
 }
