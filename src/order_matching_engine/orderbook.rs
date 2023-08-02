@@ -147,6 +147,20 @@ impl Limit {
 pub mod test {
     use super::*;
 
+
+    #[test]
+    fn total_volume_test() {
+        let price: Price = Price::new(1000.0);
+        let mut limit: Limit = Limit::new(price);
+        let buy_limit_order1 =
+        Order::new( 50.0, BidOrAsk::Bid);
+        let buy_limit_order2 =
+        Order::new( 48.0, BidOrAsk::Bid);
+        limit.add_order(buy_limit_order1);
+        limit.add_order(buy_limit_order2);
+        assert_eq!(limit.total_volume, 98.0);
+       
+    }
     #[test]
     fn limit_order_fill() {
         let price = Price::new(1000.0);
