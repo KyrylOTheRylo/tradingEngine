@@ -5,30 +5,56 @@ use rust_decimal::prelude::*;
 #[derive(Debug)]
 pub struct OrderBook {
     asks: HashMap<Decimal, Limit>,
+    
     bids: HashMap<Decimal, Limit>,
+    ask_capacity: f64,
+    bid_capacity: f64,
 }
 
 impl OrderBook {
     pub fn new() -> OrderBook {
         OrderBook {
             asks: HashMap::new(),
+
             bids: HashMap::new(),
+            ask_capacity : 0.0,
+            bid_capacity : 0.0,
         }}
 
-    pub fn fill_order_book(&mut self, market_order:&mut Order)  {
+    pub fn fill_order_book(&mut self, market_order:&mut Order) -> String  {
+        let amount: f64 =market_order.size; 
+
         let limits: Vec<&mut Limit> = match  market_order.bid_or_ask {
-            BidOrAsk::Ask => self.bid_limits(),
-            BidOrAsk::Bid => self.ask_limits(),
+            BidOrAsk::Ask => 
+            if self.ask_capacity < amount {return String::from("Not enough bid orders")}
+            else { self.bid_limits()},
+            
+            BidOrAsk::Bid => 
+            if self.bid_capacity < amount {return String::from("Not enough ask orders")}
+            else {self.ask_limits()},
             
         };
-
+        let mut answ = String::new();
         for limit in limits 
         {
             limit.fill_order(market_order);
+            
+              
             if market_order.is_filled() {
+                match market_order.bid_or_ask { 
+                    BidOrAsk::Ask => {
+                        self.ask_capacity -= amount;
+                        answ = format!("Succesfully filled {} Ask market orders  ", amount);
+                    },
+                    BidOrAsk::Bid => {
+                        self.bid_capacity -= amount;
+                        answ = format!("Succesfully filled {} Bid market orders  ", amount);
+                    },
+                }
                 break;
             }
         }
+        return answ;
 
         }
 
@@ -43,7 +69,7 @@ impl OrderBook {
         limits
     }
     pub fn bid_limits(&mut self) -> Vec<&mut Limit> {
-        let mut limits: Vec<&mut Limit> = self.asks
+        let mut limits: Vec<&mut Limit> = self.bids
         .values_mut()
         .collect::<Vec<&mut Limit>>();
 
@@ -60,23 +86,27 @@ impl OrderBook {
 
         match limit_map.get_mut(&price) {
             Some(limit) => {
-                limit.add_order(order)
+                limit.add_order(order);
+               
             }
             None => {
                 let mut lim: Limit = Limit::new(price);
                 lim.add_order(order);
                 limit_map.insert(price, lim);
+                
             }
         }
     }
-    pub fn add_order(&mut self, price: Decimal, order: Order) {
+    pub fn add_limit_order(&mut self, price: Decimal, order: Order) {
         
         match order.bid_or_ask {
             BidOrAsk::Ask => {
                 self.add_order_from_price_in_bids_or_asks(price, order, BidOrAsk::Ask);
+                self.bid_capacity += order.size;
             }
             BidOrAsk::Bid => {
                 self.add_order_from_price_in_bids_or_asks(price, order, BidOrAsk::Bid);
+                self.ask_capacity += order.size
             }
         }
     
@@ -167,6 +197,28 @@ impl Limit {
 pub mod test {
     use super::*;
     use rust_decimal_macros::dec;
+
+    #[test]
+    fn order_book_test() {
+        let mut orderbook = OrderBook::new();
+        orderbook.add_limit_order(dec!(500.0), Order::new(10.0, BidOrAsk::Ask)) ;
+        orderbook.add_limit_order(dec!(100.0), Order::new(10.0, BidOrAsk::Ask)) ;
+        orderbook.add_limit_order(dec!(200.0), Order::new(10.0, BidOrAsk::Ask)) ;
+        orderbook.add_limit_order(dec!(300.0), Order::new(10.0, BidOrAsk::Ask)) ;
+
+        let mut market_order = Order::new(12.1, BidOrAsk::Bid);
+        orderbook.fill_order_book(&mut market_order);
+        orderbook.add_limit_order(dec!(100.0), Order::new(10.0, BidOrAsk::Bid)) ;
+
+        orderbook.add_limit_order(dec!(10.0), Order::new(10.0, BidOrAsk::Bid)) ;
+        let mut market_order2 = Order::new(12.1, BidOrAsk::Ask);
+        orderbook.fill_order_book(&mut market_order2);
+
+        
+        println!("{:?}", orderbook.bid_limits());
+        //assert_eq!(orderbook.bid_limits().get(0).unwrap().orders, BidOrAsk::Bid);
+    }
+
 
     #[test]
     fn total_volume_test2() {
