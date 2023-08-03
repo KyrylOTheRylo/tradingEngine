@@ -24,6 +24,7 @@ pub mod test {
         
         assert_eq!(orderbook.bid_capacity(), 27.9);
         assert_eq!(orderbook.ask_capacity(), 7.9);
+        println!("{:?}", orderbook);
     
     }
 

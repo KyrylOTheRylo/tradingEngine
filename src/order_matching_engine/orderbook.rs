@@ -191,9 +191,11 @@ impl Limit {
 
             if market_order.is_filled() {
                 break;
-            }
-
-    }
+        }
+        }
+        for &index in delete_order.iter().rev() {
+            self.orders.remove(index);
+        }
     }
     pub fn add_order(&mut self, order: Order) {
         self.orders.push(order);
