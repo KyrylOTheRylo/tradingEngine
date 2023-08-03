@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 use std::collections::HashMap;
 use rust_decimal::prelude::*;
+use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub struct OrderBook {
-    asks: HashMap<Decimal, Limit>,
+    pub asks: BTreeMap<Decimal, Limit>,
     
-    bids: HashMap<Decimal, Limit>,
+    bids: BTreeMap<Decimal, Limit>,
     ask_capacity: f64,
     bid_capacity: f64,
 }
@@ -14,13 +15,13 @@ pub struct OrderBook {
 impl OrderBook {
     pub fn new() -> OrderBook {
         OrderBook {
-            asks: HashMap::new(),
+            asks: BTreeMap::new(),
 
-            bids: HashMap::new(),
+            bids: BTreeMap::new(),
             ask_capacity : 0.0,
             bid_capacity : 0.0,
         }}
-
+    
     pub fn bid_capacity(&self) -> f64 { return self.bid_capacity;}
 
     pub fn ask_capacity(&self) -> f64 { return  self.ask_capacity; }
@@ -63,27 +64,16 @@ impl OrderBook {
         }
 
     pub fn ask_limits(&mut self) -> Vec<&mut Limit> {
-        let mut limits: Vec<&mut Limit> = self.asks
-        .values_mut()
-        .collect::<Vec<&mut Limit>>();
-
-        limits.sort_by(|a: &&mut Limit,
-             b: &&mut Limit| a.price.cmp(&b.price));
-
-        limits
+            let limits: Vec<&mut Limit> = self.asks.values_mut().collect();
+            limits
     }
+        
     pub fn bid_limits(&mut self) -> Vec<&mut Limit> {
-        let mut limits: Vec<&mut Limit> = self.bids
-        .values_mut()
-        .collect::<Vec<&mut Limit>>();
-
-        limits.sort_by(|a: &&mut Limit,
-             b: &&mut Limit| b.price.cmp(&a.price));
-
-        limits
+            let limits: Vec<&mut Limit> = self.bids.values_mut().rev().collect();
+            limits
     }
     fn add_order_from_price_in_bids_or_asks(&mut self, price: Decimal, order: Order, bid_or_ask: BidOrAsk)  {
-        let limit_map: &mut HashMap<Decimal, Limit> = match bid_or_ask {
+        let limit_map: &mut BTreeMap<Decimal, Limit> = match bid_or_ask {
             BidOrAsk::Bid => &mut self.bids,
             BidOrAsk::Ask => &mut self.asks,
         };
