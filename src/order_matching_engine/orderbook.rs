@@ -1,11 +1,12 @@
 #![allow(dead_code)]
-use std::collections::HashMap;
+
 use rust_decimal::prelude::*;
+use serde::{Serialize,Deserialize};
 use std::collections::BTreeMap;
 
-#[derive(Debug)]
+#[derive(Debug,Serialize,Deserialize)]
 pub struct OrderBook {
-    pub asks: BTreeMap<Decimal, Limit>,
+    asks: BTreeMap<Decimal, Limit>,
     
     bids: BTreeMap<Decimal, Limit>,
     ask_capacity: f64,
@@ -26,6 +27,13 @@ impl OrderBook {
 
     pub fn ask_capacity(&self) -> f64 { return  self.ask_capacity; }
 
+    pub fn first_price_ask(&mut self) -> Decimal{
+        return self.ask_limits().get(0).unwrap().price  ;
+    }
+    pub fn first_price_bid(&mut self) -> Decimal{
+        return self.bid_limits().get(0).unwrap().price  ;
+    }
+
     pub fn fill_order_book(&mut self, market_order:&mut Order) -> String  {
         let amount: f64 =market_order.size; 
 
@@ -39,11 +47,14 @@ impl OrderBook {
             else {self.ask_limits()},
             
         };
-        let mut answ = String::new();
-        for limit in limits 
-        {
+        let mut answ: String = String::new();
+        let mut delete_limit: Vec<Decimal> = Vec::new();
+        for  limit in limits {
             limit.fill_order(market_order);
-            
+            if limit.total_volume() == 0.0 {
+                delete_limit.push(limit.price);
+
+            }
               
             if market_order.is_filled() {
                 match market_order.bid_or_ask { 
@@ -58,6 +69,12 @@ impl OrderBook {
                 }
                 break;
             }
+        }
+        for &index in delete_limit.iter().rev() {
+            match  market_order.bid_or_ask {
+                BidOrAsk::Ask => self.bids.remove(&index),
+                BidOrAsk::Bid => self.asks.remove(&index),
+            };
         }
         return answ;
 
@@ -107,13 +124,13 @@ impl OrderBook {
 }}
 
 
-#[derive(Debug, Hash, Clone, Copy)]
+#[derive(Debug, Hash, Clone, Copy, Serialize,Deserialize)]
 pub enum BidOrAsk {
     Bid,
     Ask  
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy,Serialize,Deserialize)]
 pub struct Order {
     size: f64,
     bid_or_ask: BidOrAsk, 
@@ -132,13 +149,20 @@ impl Order {
     }
     pub fn size(&self) -> f64 {
         self.size}
+    pub fn bid_or_ask(&self) -> BidOrAsk {self.bid_or_ask} 
+    pub fn get_bid_or_ask(&self) -> String {  match self.bid_or_ask {
+        BidOrAsk::Ask => return "Ask".to_string(),
+        BidOrAsk::Bid => return "Bid".to_string()
+    };
     }
+    }
+    
 
     
 
 
 
-#[derive(Debug)]
+#[derive(Debug,Serialize,Deserialize)]
 pub struct Limit {
     price: Decimal,
     orders: Vec<Order>,
@@ -183,7 +207,7 @@ impl Limit {
                 break;
         }
         }
-        for &index in delete_order.iter().rev() {
+        for &index in delete_order.iter() {
             self.orders.remove(index);
         }
     }
