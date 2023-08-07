@@ -1,12 +1,12 @@
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
-use rust_decimal::Decimal;
+
 use rust_decimal_macros::dec;
-use std::path::Path;
+
 use std::sync::{Arc, Mutex};
 mod order_matching_engine;
-use order_matching_engine::orderbook::{Order, Limit,  OrderBook, BidOrAsk};
+use order_matching_engine::orderbook::{Order,  OrderBook, BidOrAsk};
 use order_matching_engine::engine::{TradingPair, MatchEngine};
-use actix_web::{FromRequest, HttpRequest};
+
 
 
 #[post("/create_limit_order/{base}_{quote}/{price}/{size}")]
@@ -14,7 +14,7 @@ async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
     params: web::Path<(String, String, String, String)>) -> impl Responder {
         //let pair: TradingPair = TradingPair::new(params.0 , params.1);
         //let order: Order  = Order::new();
-        let engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
+        let _engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
         //engine.place_limit_order(pair, price, order); 
 
         println!("{} {} {} {} ",params.0, params.1, params.2, params.3 );
