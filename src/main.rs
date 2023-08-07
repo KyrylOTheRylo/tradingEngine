@@ -1,7 +1,7 @@
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 
 use rust_decimal_macros::dec;
-
+use rust_decimal::Decimal;
 use std::sync::{Arc, Mutex};
 mod order_matching_engine;
 use order_matching_engine::orderbook::{Order,  OrderBook, BidOrAsk};
@@ -9,17 +9,59 @@ use order_matching_engine::engine::{TradingPair, MatchEngine};
 
 
 
-#[post("/create_limit_order/{base}_{quote}/{price}/{size}")]
+#[post("/create_limit_order/{base}_{quote}/{buy_or_sell}/{price}/{size}")]
 async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
-    params: web::Path<(String, String, String, String)>) -> impl Responder {
-        //let pair: TradingPair = TradingPair::new(params.0 , params.1);
+    params: web::Path<(String, String, String, String, String)>) -> impl Responder {
+        
         //let order: Order  = Order::new();
-        let _engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
-        //engine.place_limit_order(pair, price, order); 
+        let price_or_wrong: String = params.3.to_string();
+        
+        match price_or_wrong.parse::<f64>() {
+            Ok(price) => {
+                let size_or_wrong = params.4.to_string();
+                match size_or_wrong.parse::<f64>() {
+                    Ok(size) => {
+                        match params.2.as_str(){
+                            "buy" => {
+                                let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
+                                let order: Order  = Order::new(size, BidOrAsk::Bid);
+                                let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
+                                let tmp_price: Decimal = Decimal::from_f64_retain(price).unwrap();
+                                
+                                
+                                match engine.place_limit_order(pair, tmp_price, order){
+                                    Ok(answ) => {return HttpResponse::Ok().body(answ);}
+                                    Err(error_msg) => {return HttpResponse::Ok().body(error_msg);}
+                                } 
+                            },
+                            "sell" => {
+                                let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
+                                let order: Order  = Order::new(size, BidOrAsk::Ask);
+                                let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
+                                let tmp_price: Decimal = Decimal::from_f64_retain(price).unwrap();
+                                
+                                
+                                match engine.place_limit_order(pair, tmp_price, order){
+                                    Ok(answ) => {return HttpResponse::Ok().body(answ);}
+                                    Err(error_msg) => {return HttpResponse::Ok().body(error_msg);}
+                                } 
+                            },
+                            _ => return HttpResponse::Ok().body("Wrong order type (should be buy or sell)"),
+                        }
+                    }
+                    Err(_) => {return HttpResponse::Ok().body("Wrong size format")  ;}
+                    }
+                
+            }
+            Err(_) => {
+                // Parsing failed, return an HTTP response with an error message.
+                return HttpResponse::Ok().body("Invalid price format");
+            }
+        }
+            
 
-        println!("{} {} {} {} ",params.0, params.1, params.2, params.3 );
-        HttpResponse::Ok().body("SADAS")    
-}
+       
+    }
 
 #[get("/get_list_of_pairs")]
 async fn get_list_of_pairs(data: web::Data<Arc<Mutex<MatchEngine>>>) -> impl Responder {
@@ -36,7 +78,7 @@ async fn get_limits_for_a_pair(data: web::Data<Arc<Mutex<MatchEngine>>>,
         let pair: TradingPair = TradingPair::new(params.0.to_string(), params.1.to_string());
     
     let engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
-    let order_book = engine.get_limits_for_a_pair(pair);
+    let order_book: Option<&OrderBook> = engine.get_limits_for_a_pair(pair);
 
     // Serialize OrderBook to JSON and then deserialize it back to create a deep copy
     match order_book {
