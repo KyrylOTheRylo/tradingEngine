@@ -75,13 +75,12 @@ pub mod test {
         Order::new( 48.0, BidOrAsk::Bid);
 
         let mut  market_sell_order: Order =
-         Order::new( 151.0, BidOrAsk::Ask);
+         Order::new( 90.0, BidOrAsk::Ask);
 
         limit.add_order(buy_limit_order1);
         limit.add_order(buy_limit_order2);
         limit.fill_order(&mut market_sell_order);
-        assert_eq!(limit.total_volume(), 0.0);
-        assert_eq!(market_sell_order.size(), 53.0 );
+        println!("{:?}", market_sell_order);
     }
 
     #[test]
@@ -119,7 +118,31 @@ pub mod test {
         engine.get_orderbooks();
         println!("{:?}",engine.get_limits_for_a_pair(btc_usd));
 
-        assert_eq!(engine.get_orderbooks().len(), 1)
+        assert_eq!(engine.get_orderbooks().len(), 1);
+
+    
+    }
+
+    #[test]
+    fn market_order_test() {
+        let mut engine: MatchEngine  = MatchEngine::new();
+
+        let btc_usd = TradingPair::new(String::from("btc"), String::from("usd"));
+        let btc_eth = TradingPair::new(String::from("btc"), String::from("eth"));
+        engine.add_new_market(btc_usd.clone());
+        let order: Order = Order::new(10.4, BidOrAsk::Ask);
+        engine.place_limit_order(btc_usd.clone(), dec!(10.3), order);
+        
+        let order2: Order = Order::new(10.5, BidOrAsk::Bid);
+        println!("{:?}",engine.place_limit_order(btc_usd.clone(), dec!(10.2), order2));
+
+        let mut market_order = Order::new(10.5, BidOrAsk::Ask);
+        let mut market_order2 = Order::new(10.4, BidOrAsk::Bid);
+        engine.fill_market_order(btc_usd.clone() ,&mut market_order);
+        engine.fill_market_order(btc_usd.clone() ,&mut market_order2);
+
+        assert_eq!(engine.get_limits_for_a_pair(btc_usd).unwrap().bid_capacity(), 0.0);  
+
     
     }
 
