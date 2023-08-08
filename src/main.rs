@@ -150,20 +150,7 @@ async fn main() -> std::io::Result<()> {
         engine.add_new_market(btc_eth.clone());
     }
     let data: web::Data<Arc<Mutex<MatchEngine>>> = web::Data::new(Arc::new(Mutex::new(engine)));
-    let order: Order = Order::new(10.4, BidOrAsk::Ask);
-
-    {
-        let mut  engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
-        engine.place_limit_order(btc_usd.clone(), dec!(10.3), order);
-        let order2: Order = Order::new(10.5, BidOrAsk::Bid);
-        let p: Result<String, String>  = engine.place_limit_order(btc_usd.clone(), dec!(10.5), order2);
-        println!("{:?}", p.clone());
-    }
-
-    {
-        let engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
-        println!("{:?}",engine.get_limits_for_a_pair(btc_usd));
-    }
+    
     HttpServer::new(move || {
         App::new()
             .app_data(data.clone())
