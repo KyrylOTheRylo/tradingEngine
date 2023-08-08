@@ -5,9 +5,45 @@ use rust_decimal::Decimal;
 use std::sync::{Arc, Mutex};
 mod order_matching_engine;
 use order_matching_engine::orderbook::{Order,  OrderBook, BidOrAsk};
-use order_matching_engine::engine::{TradingPair, MatchEngine};
+use order_matching_engine::engine::{TradingPair, MatchEngine, self};
 
 
+#[post("/create_market_order/{base}_{quote}/{buy_or_sell}/{size}")]
+async fn create_market_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
+    params: web::Path<(String, String, String, String)>) -> impl Responder {
+        let size_or_wrong: String = params.3.to_string();
+        
+        match size_or_wrong.parse::<f64>() {
+            Ok(size) => {
+                match params.2.as_str(){
+                    "buy"  => {
+                        let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
+                                let mut order: Order  = Order::new(size, BidOrAsk::Bid);
+                                let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
+                                match engine.fill_market_order(pair, &mut order) {
+                                    Ok(answ) => {return HttpResponse::Ok().body(answ);},
+                                    Err(err) => {return HttpResponse::Ok().body(err)}
+
+                                }
+                    },
+                    "sell" => {
+                        let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
+                                let mut order: Order  = Order::new(size, BidOrAsk::Ask);
+                                let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
+                                match engine.fill_market_order(pair, &mut order) {
+                                    Ok(answ) => {return HttpResponse::Ok().body(answ);},
+                                    Err(err) => {return HttpResponse::Ok().body(err)}
+                                    
+                                }
+                    },
+                    _ => {return HttpResponse::Ok().body("Wrong order type");}
+
+
+                };
+            }
+                
+            Err(_) => HttpResponse::Ok().body("Wrong price format")  }
+    }
 
 #[post("/create_limit_order/{base}_{quote}/{buy_or_sell}/{price}/{size}")]
 async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
@@ -16,7 +52,7 @@ async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
         //let order: Order  = Order::new();
         let price_or_wrong: String = params.3.to_string();
         
-        match price_or_wrong.parse::<f64>() {
+        match price_or_wrong.parse::<Decimal>() {
             Ok(price) => {
                 let size_or_wrong = params.4.to_string();
                 match size_or_wrong.parse::<f64>() {
@@ -26,10 +62,10 @@ async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
                                 let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
                                 let order: Order  = Order::new(size, BidOrAsk::Bid);
                                 let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
-                                let tmp_price: Decimal = Decimal::from_f64_retain(price).unwrap();
                                 
                                 
-                                match engine.place_limit_order(pair, tmp_price, order){
+                                
+                                match engine.place_limit_order(pair, price, order){
                                     Ok(answ) => {return HttpResponse::Ok().body(answ);}
                                     Err(error_msg) => {return HttpResponse::Ok().body(error_msg);}
                                 } 
@@ -38,10 +74,10 @@ async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
                                 let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
                                 let order: Order  = Order::new(size, BidOrAsk::Ask);
                                 let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
-                                let tmp_price: Decimal = Decimal::from_f64_retain(price).unwrap();
                                 
                                 
-                                match engine.place_limit_order(pair, tmp_price, order){
+                                
+                                match engine.place_limit_order(pair, price, order){
                                     Ok(answ) => {return HttpResponse::Ok().body(answ);}
                                     Err(error_msg) => {return HttpResponse::Ok().body(error_msg);}
                                 } 
@@ -135,6 +171,7 @@ async fn main() -> std::io::Result<()> {
             .service(get_list_of_pairs)
             .service(get_limits_for_a_pair)
             .service(echo)     
+            .service(create_market_order)
             .route("/hey", web::get().to(manual_hello))
     })
     .bind(("127.0.0.1", 8080))?

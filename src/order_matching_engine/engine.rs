@@ -31,7 +31,17 @@ impl MatchEngine {
  pub fn new() -> MatchEngine{ 
     MatchEngine{orderbooks : HashMap::new()}   
  }
+ pub fn fill_market_order(&mut self,pair: TradingPair, order: &mut Order) -> Result<String, String> {
+    match  self.orderbooks.get_mut(&pair) {
+        Some(orderbook) => {
+            return Ok(orderbook.fill_order_book(order));
 
+        },
+        None => {
+            Err(format!("the orderbook {} doesn't exist ",  pair.to_string()))
+        }
+    }
+ }
  pub fn get_limits_for_a_pair<'a>(&self, pair: TradingPair) -> Option<&OrderBook>{
     self.orderbooks.get(&pair)
  } 
