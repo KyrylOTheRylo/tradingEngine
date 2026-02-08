@@ -51,7 +51,6 @@ impl MatchEngine {
  pub fn add_new_market(&mut self, pair: TradingPair) {
 
     self.orderbooks.insert(pair.clone(), OrderBook::new());
-    println!("Opening new orderbook {:?}", pair.to_string())
  }
  pub fn make_limit(&mut self, size: f64, bid_or_ask: BidOrAsk) -> Order {
     Order::new(size, bid_or_ask)
@@ -62,7 +61,6 @@ impl MatchEngine {
             match order.bid_or_ask() {
                 BidOrAsk::Ask => {
                     if orderbook.bid_limits().len()>0 && orderbook.first_price_bid().clone() >= price.clone() {
-                       println!("You can not place a sell order on that price {:?}. Try a market order.", price);
                        return Err(format!("You can not place a sell order on that price {:?}. Try a market order.", price));
                         
                     }
@@ -70,7 +68,6 @@ impl MatchEngine {
                 }
                 BidOrAsk::Bid => {
                     if orderbook.ask_limits().len()>0 && orderbook.first_price_ask() <= price {
-                        println!("You can not place a buy order on that price {:?}. Try a market order.", price);
                         return Err(format!("You can not place a buy order on that price {:?}. Try a market order.", price));
                     }
                 }

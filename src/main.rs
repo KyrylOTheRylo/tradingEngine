@@ -12,14 +12,14 @@ use order_matching_engine::engine::{TradingPair, MatchEngine, self};
 async fn create_market_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
     params: web::Path<(String, String, String, String)>) -> impl Responder {
         let size_or_wrong: String = params.3.to_string();
-        
+        let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
         match size_or_wrong.parse::<f64>() {
             Ok(size) => {
                 match params.2.as_str(){
                     "buy"  => {
                         let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
                                 let mut order: Order  = Order::new(size, BidOrAsk::Bid);
-                                let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
+                                
                                 match engine.fill_market_order(pair, &mut order) {
                                     Ok(answ) => {return HttpResponse::Ok().body(answ);},
                                     Err(err) => {return HttpResponse::Ok().body(err)}
@@ -29,7 +29,7 @@ async fn create_market_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
                     "sell" => {
                         let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
                                 let mut order: Order  = Order::new(size, BidOrAsk::Ask);
-                                let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
+                                
                                 match engine.fill_market_order(pair, &mut order) {
                                     Ok(answ) => {return HttpResponse::Ok().body(answ);},
                                     Err(err) => {return HttpResponse::Ok().body(err)}
@@ -48,7 +48,7 @@ async fn create_market_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
 #[post("/create_limit_order/{base}_{quote}/{buy_or_sell}/{price}/{size}")]
 async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
     params: web::Path<(String, String, String, String, String)>) -> impl Responder {
-        
+        let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
         //let order: Order  = Order::new();
         let price_or_wrong: String = params.3.to_string();
         
@@ -61,7 +61,7 @@ async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
                             "buy" => {
                                 let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
                                 let order: Order  = Order::new(size, BidOrAsk::Bid);
-                                let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
+                                
                                 
                                 
                                 
@@ -73,7 +73,6 @@ async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
                             "sell" => {
                                 let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
                                 let order: Order  = Order::new(size, BidOrAsk::Ask);
-                                let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
                                 
                                 
                                 
@@ -161,7 +160,7 @@ async fn main() -> std::io::Result<()> {
             .service(create_market_order)
             .route("/hey", web::get().to(manual_hello))
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", 8080))?
     .run()
     .await
 }
