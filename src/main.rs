@@ -1,11 +1,10 @@
 use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
 
-use rust_decimal_macros::dec;
 use rust_decimal::Decimal;
 use std::sync::{Arc, Mutex};
 mod order_matching_engine;
 use order_matching_engine::orderbook::{Order,  OrderBook, BidOrAsk};
-use order_matching_engine::engine::{TradingPair, MatchEngine, self};
+use order_matching_engine::engine::{TradingPair, MatchEngine};
 
 
 #[post("/create_market_order/{base}_{quote}/{buy_or_sell}/{size}")]
@@ -160,7 +159,7 @@ async fn main() -> std::io::Result<()> {
             .service(create_market_order)
             .route("/hey", web::get().to(manual_hello))
     })
-    .bind(("0.0.0.0", 8080))?
+    .bind(("0.0.0.0", 8081))?
     .run()
     .await
 }
