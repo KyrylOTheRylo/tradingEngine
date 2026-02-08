@@ -2,13 +2,13 @@
 
 use rust_decimal::prelude::*;
 use serde::{Serialize,Deserialize};
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 #[derive(Debug,Serialize,Deserialize)]
 pub struct OrderBook {
-    asks: BTreeMap<Decimal, Limit>,
-    
-    bids: BTreeMap<Decimal, Limit>,
+    asks: HashMap<Decimal, Limit>,
+
+    bids: HashMap<Decimal, Limit>,
     ask_capacity: f64,
     bid_capacity: f64,
 }
@@ -16,9 +16,9 @@ pub struct OrderBook {
 impl OrderBook {
     pub fn new() -> OrderBook {
         OrderBook {
-            asks: BTreeMap::new(),
+            asks: HashMap::new(),
 
-            bids: BTreeMap::new(),
+            bids: HashMap::new(),
             ask_capacity : 0.0,
             bid_capacity : 0.0,
         }}
@@ -27,53 +27,70 @@ impl OrderBook {
 
     pub fn ask_capacity(&self) -> f64 { return  self.ask_capacity; }
 
-    pub fn first_price_ask(&mut self) -> Decimal{
-        return self.ask_limits().get(0).unwrap().price  ;
+    pub fn first_price_ask(&self) -> Decimal{
+        self.asks.keys().min().copied().unwrap()
     }
-    pub fn first_price_bid(&mut self) -> Decimal{
-        return self.bid_limits().get(0).unwrap().price  ;
+    pub fn first_price_bid(&self) -> Decimal{
+        self.bids.keys().max().copied().unwrap()
     }
 
     pub fn fill_order_book(&mut self, market_order:&mut Order) -> String  {
-        let amount: f64 =market_order.size; 
+        let amount: f64 = market_order.size;
 
-        let limits: Vec<&mut Limit> = match  market_order.bid_or_ask {
-            BidOrAsk::Ask => 
-            if self.ask_capacity < amount {return String::from("Not enough bid orders")}
-            else { self.bid_limits()},
-            
-            BidOrAsk::Bid => 
-            if self.bid_capacity < amount {return String::from("Not enough ask orders")}
-            else {self.ask_limits()},
-            
+        // Determine which side to match against
+        let (limits_to_match, _available_capacity) = match market_order.bid_or_ask {
+            // Bid order (buy): match against asks (sellers) - need asks available
+            BidOrAsk::Bid => {
+                if self.ask_capacity < amount {
+                    return String::from("Not enough ask orders to fill this buy");
+                }
+                // Get asks sorted from lowest to highest price (best prices first)
+                let mut asks: Vec<&mut Limit> = self.asks.values_mut().collect();
+                asks.sort_by_key(|limit| limit.price);
+                (asks, self.ask_capacity)
+            },
+            // Ask order (sell): match against bids (buyers) - need bids available
+            BidOrAsk::Ask => {
+                if self.bid_capacity < amount {
+                    return String::from("Not enough bid orders to fill this sell");
+                }
+                // Get bids sorted from highest to lowest price (best prices first)
+                let mut bids: Vec<&mut Limit> = self.bids.values_mut().collect();
+                bids.sort_by(|a, b| b.price.cmp(&a.price));
+                (bids, self.bid_capacity)
+            },
         };
+
         let mut answ: String = String::new();
         let mut delete_limit: Vec<Decimal> = Vec::new();
-        for  limit in limits {
+
+        // Match against available limits in price order
+        for limit in limits_to_match {
             limit.fill_order(market_order);
             if limit.total_volume() == 0.0 {
                 delete_limit.push(limit.price);
-
             }
               
             if market_order.is_filled() {
                 match market_order.bid_or_ask { 
                     BidOrAsk::Ask => {
-                        self.ask_capacity -= amount;
-                        answ = format!("Succesfully filled {} Ask market orders  ", amount);
+                        self.bid_capacity -= amount;
+                        answ = format!("Successfully filled {} Ask market orders", amount);
                     },
                     BidOrAsk::Bid => {
-                        self.bid_capacity -= amount;
-                        answ = format!("Succesfully filled {} Bid market orders  ", amount);
+                        self.ask_capacity -= amount;
+                        answ = format!("Successfully filled {} Bid market orders", amount);
                     },
                 }
                 break;
             }
         }
-        for &index in delete_limit.iter().rev() {
-            match  market_order.bid_or_ask {
-                BidOrAsk::Ask => self.bids.remove(&index),
-                BidOrAsk::Bid => self.asks.remove(&index),
+
+        // Remove fully matched limit levels
+        for &index in delete_limit.iter() {
+            match market_order.bid_or_ask {
+                BidOrAsk::Ask => { self.bids.remove(&index); },
+                BidOrAsk::Bid => { self.asks.remove(&index); },
             };
         }
         return answ;
@@ -86,11 +103,11 @@ impl OrderBook {
     }
         
     pub fn bid_limits(&mut self) -> Vec<&mut Limit> {
-            let limits: Vec<&mut Limit> = self.bids.values_mut().rev().collect();
+            let limits: Vec<&mut Limit> = self.bids.values_mut().collect();
             limits
     }
     fn add_order_from_price_in_bids_or_asks(&mut self, price: Decimal, order: Order, bid_or_ask: BidOrAsk)  {
-        let limit_map: &mut BTreeMap<Decimal, Limit> = match bid_or_ask {
+        let limit_map: &mut HashMap<Decimal, Limit> = match bid_or_ask {
             BidOrAsk::Bid => &mut self.bids,
             BidOrAsk::Ask => &mut self.asks,
         };
@@ -113,14 +130,13 @@ impl OrderBook {
         match order.bid_or_ask {
             BidOrAsk::Ask => {
                 self.add_order_from_price_in_bids_or_asks(price, order, BidOrAsk::Ask);
-                self.bid_capacity += order.size;
+                self.ask_capacity += order.size;
             }
             BidOrAsk::Bid => {
                 self.add_order_from_price_in_bids_or_asks(price, order, BidOrAsk::Bid);
-                self.ask_capacity += order.size
+                self.bid_capacity += order.size
             }
-        }
-    
+    }
 }}
 
 

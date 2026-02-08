@@ -26,9 +26,9 @@ pub mod test {
         orderbook.fill_order_book(&mut market_order2);
         println!("{:?}", orderbook);
         
-        assert_eq!(orderbook.bid_capacity(), 27.9);
-        assert_eq!(orderbook.ask_capacity(), 7.9);
-    
+        assert_eq!(orderbook.ask_capacity(), 27.9);
+        assert_eq!(orderbook.bid_capacity(), 7.9);
+
     }
 
 
@@ -161,9 +161,9 @@ pub mod test {
             assert!(result.is_ok(), "Failed to place order {}", i);
         }
 
-        // Verify total capacity (Ask orders track bid_capacity due to implementation)
+        // Verify total capacity (Ask orders now correctly track ask_capacity)
         let orderbook = engine.get_limits_for_a_pair(btc_usd.clone()).unwrap();
-        assert_eq!(orderbook.bid_capacity(), 100.0);
+        assert_eq!(orderbook.ask_capacity(), 100.0);
     }
 
     #[test]
@@ -461,4 +461,48 @@ pub mod test {
         assert!(engine.get_limits_for_a_pair(btc_eth).is_some());
     }
 
+    #[test]
+    fn test_market_order_matching_best_price() {
+        // This test reproduces the issue reported where market orders weren't matching
+        // against the best available prices
+
+        let mut orderbook: OrderBook = OrderBook::new();
+
+        // Setup initial asks (sellers):
+        // price = 11.3 with amount 40.0
+        // price = 12.0 with amount 50.0
+        // price = 11.0 with amount 1.0
+        orderbook.add_limit_order(dec!(11.3), Order::new(40.0, BidOrAsk::Ask));
+        orderbook.add_limit_order(dec!(12.0), Order::new(50.0, BidOrAsk::Ask));
+        orderbook.add_limit_order(dec!(11.0), Order::new(1.0, BidOrAsk::Ask));
+
+        // Setup initial bids (buyers):
+        // price = 10.0 with amount 100.0
+        orderbook.add_limit_order(dec!(10.0), Order::new(100.0, BidOrAsk::Bid));
+
+        // Before: ask_capacity = 40 + 50 + 1 = 91.0
+        assert_eq!(orderbook.ask_capacity(), 91.0);
+
+        // Execute a buy order of 5.0 (should match against the lowest ask prices first)
+        // Expected to match: 1.0 from 11.0, then 4.0 from 11.3
+        let mut market_order = Order::new(5.0, BidOrAsk::Bid);
+        let result = orderbook.fill_order_book(&mut market_order);
+
+        println!("Market order result: {}", result);
+        println!("Remaining ask_capacity: {}", orderbook.ask_capacity());
+
+        // After matching 5.0:
+        // - The 1.0 at 11.0 should be completely filled (removed)
+        // - The 40.0 at 11.3 should have 4.0 filled, leaving 36.0
+        // - The 50.0 at 12.0 should remain unchanged
+        // ask_capacity should now be: 36.0 + 50.0 = 86.0
+        assert_eq!(orderbook.ask_capacity(), 86.0,
+                   "After matching 5.0 units, ask_capacity should be 86.0 (91.0 - 5.0)");
+
+        // Verify the market order is filled
+        assert!(market_order.is_filled(), "Market order should be completely filled");
+        assert_eq!(market_order.size(), 0.0, "Market order size should be 0 after filling");
+    }
+
 }
+
