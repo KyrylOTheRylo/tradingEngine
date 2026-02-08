@@ -60,15 +60,17 @@ impl MatchEngine {
         Some(orderbook) => {
             match order.bid_or_ask() {
                 BidOrAsk::Ask => {
-                    if orderbook.bid_limits().len()>0 && orderbook.first_price_bid().clone() >= price.clone() {
-                       return Err(format!("You can not place a sell order on that price {:?}. Try a market order.", price));
-                        
+                    if let Some(best_bid) = orderbook.first_price_bid() {
+                        if best_bid >= price {
+                            return Err(format!("You can not place a sell order on that price {:?}. Try a market order.", price));
+                        }
                     }
-
                 }
                 BidOrAsk::Bid => {
-                    if orderbook.ask_limits().len()>0 && orderbook.first_price_ask() <= price {
-                        return Err(format!("You can not place a buy order on that price {:?}. Try a market order.", price));
+                    if let Some(best_ask) = orderbook.first_price_ask() {
+                        if best_ask <= price {
+                            return Err(format!("You can not place a buy order on that price {:?}. Try a market order.", price));
+                        }
                     }
                 }
             };

@@ -3,7 +3,7 @@
 
 #[cfg(test)]
 pub mod benchmark {
-    use crate::order_matching_engine::orderbook::{Order, OrderBook, BidOrAsk};
+    use crate::order_matching_engine::orderbook::{Order, BidOrAsk};
     use crate::order_matching_engine::engine::{TradingPair, MatchEngine};
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;

@@ -2,13 +2,13 @@
 
 use rust_decimal::prelude::*;
 use serde::{Serialize,Deserialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Debug,Serialize,Deserialize)]
 pub struct OrderBook {
-    asks: HashMap<Decimal, Limit>,
+    asks: BTreeMap<Decimal, Limit>,
 
-    bids: HashMap<Decimal, Limit>,
+    bids: BTreeMap<Decimal, Limit>,
     ask_capacity: f64,
     bid_capacity: f64,
 }
@@ -16,9 +16,9 @@ pub struct OrderBook {
 impl OrderBook {
     pub fn new() -> OrderBook {
         OrderBook {
-            asks: HashMap::new(),
+            asks: BTreeMap::new(),
 
-            bids: HashMap::new(),
+            bids: BTreeMap::new(),
             ask_capacity : 0.0,
             bid_capacity : 0.0,
         }}
@@ -27,87 +27,85 @@ impl OrderBook {
 
     pub fn ask_capacity(&self) -> f64 { return  self.ask_capacity; }
 
-    pub fn first_price_ask(&self) -> Decimal{
-        self.asks.keys().min().copied().unwrap()
+    pub fn first_price_ask(&self) -> Option<Decimal>{
+        self.asks.keys().next().copied()
     }
-    pub fn first_price_bid(&self) -> Decimal{
-        self.bids.keys().max().copied().unwrap()
+    pub fn first_price_bid(&self) -> Option<Decimal>{
+        self.bids.keys().next_back().copied()
     }
 
     pub fn fill_order_book(&mut self, market_order:&mut Order) -> String  {
         let amount: f64 = market_order.size;
 
-        // Determine which side to match against
-        let (limits_to_match, _available_capacity) = match market_order.bid_or_ask {
+        match market_order.bid_or_ask {
             // Bid order (buy): match against asks (sellers) - need asks available
             BidOrAsk::Bid => {
                 if self.ask_capacity < amount {
                     return String::from("Not enough ask orders to fill this buy");
                 }
-                // Get asks sorted from lowest to highest price (best prices first)
-                let mut asks: Vec<&mut Limit> = self.asks.values_mut().collect();
-                asks.sort_by_key(|limit| limit.price);
-                (asks, self.ask_capacity)
+
+                // BTreeMap::iter() naturally iterates from lowest to highest price (best asks first)
+                let mut prices_to_remove = Vec::new();
+
+                for (&price, limit) in self.asks.iter_mut() {
+                    limit.fill_order(market_order);
+                    if limit.total_volume() == 0.0 {
+                        prices_to_remove.push(price);
+                    }
+                    if market_order.is_filled() {
+                        break;
+                    }
+                }
+
+                // Remove empty price levels
+                for price in prices_to_remove {
+                    self.asks.remove(&price);
+                }
+
+                self.ask_capacity -= amount;
+                format!("Successfully filled {} Bid market orders", amount)
             },
+
             // Ask order (sell): match against bids (buyers) - need bids available
             BidOrAsk::Ask => {
                 if self.bid_capacity < amount {
                     return String::from("Not enough bid orders to fill this sell");
                 }
-                // Get bids sorted from highest to lowest price (best prices first)
-                let mut bids: Vec<&mut Limit> = self.bids.values_mut().collect();
-                bids.sort_by(|a, b| b.price.cmp(&a.price));
-                (bids, self.bid_capacity)
-            },
-        };
 
-        let mut answ: String = String::new();
-        let mut delete_limit: Vec<Decimal> = Vec::new();
+                // Use reverse iterator: BTreeMap::iter().rev() goes from highest to lowest (best bids first)
+                let mut prices_to_remove = Vec::new();
 
-        // Match against available limits in price order
-        for limit in limits_to_match {
-            limit.fill_order(market_order);
-            if limit.total_volume() == 0.0 {
-                delete_limit.push(limit.price);
-            }
-              
-            if market_order.is_filled() {
-                match market_order.bid_or_ask { 
-                    BidOrAsk::Ask => {
-                        self.bid_capacity -= amount;
-                        answ = format!("Successfully filled {} Ask market orders", amount);
-                    },
-                    BidOrAsk::Bid => {
-                        self.ask_capacity -= amount;
-                        answ = format!("Successfully filled {} Bid market orders", amount);
-                    },
+                for (&price, limit) in self.bids.iter_mut().rev() {
+                    limit.fill_order(market_order);
+                    if limit.total_volume() == 0.0 {
+                        prices_to_remove.push(price);
+                    }
+                    if market_order.is_filled() {
+                        break;
+                    }
                 }
-                break;
-            }
-        }
 
-        // Remove fully matched limit levels
-        for &index in delete_limit.iter() {
-            match market_order.bid_or_ask {
-                BidOrAsk::Ask => { self.bids.remove(&index); },
-                BidOrAsk::Bid => { self.asks.remove(&index); },
-            };
-        }
-        return answ;
+                // Remove empty price levels
+                for price in prices_to_remove {
+                    self.bids.remove(&price);
+                }
 
+                self.bid_capacity -= amount;
+                format!("Successfully filled {} Ask market orders", amount)
+            },
         }
+    }
 
-    pub fn ask_limits(&mut self) -> Vec<&mut Limit> {
-            let limits: Vec<&mut Limit> = self.asks.values_mut().collect();
-            limits
+    pub fn ask_limits(&self) -> Vec<&Limit> {
+        self.asks.values().collect()
     }
         
-    pub fn bid_limits(&mut self) -> Vec<&mut Limit> {
-            let limits: Vec<&mut Limit> = self.bids.values_mut().collect();
-            limits
+    pub fn bid_limits(&self) -> Vec<&Limit> {
+        // Return bids in descending order (highest first)
+        self.bids.values().rev().collect()
     }
     fn add_order_from_price_in_bids_or_asks(&mut self, price: Decimal, order: Order, bid_or_ask: BidOrAsk)  {
-        let limit_map: &mut HashMap<Decimal, Limit> = match bid_or_ask {
+        let limit_map: &mut BTreeMap<Decimal, Limit> = match bid_or_ask {
             BidOrAsk::Bid => &mut self.bids,
             BidOrAsk::Ask => &mut self.asks,
         };
@@ -196,7 +194,10 @@ impl Limit {
             total_volume,
         }}
     
-    
+    pub fn price(&self) -> Decimal {
+        self.price
+    }
+
     pub fn total_volume(&self) -> f64 { self.total_volume}
 
     pub fn fill_order(&mut self, market_order: &mut Order) {
