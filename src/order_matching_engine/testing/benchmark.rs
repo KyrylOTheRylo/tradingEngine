@@ -230,6 +230,7 @@ pub mod benchmark {
         println!("Total orders processed: {}", total_orders);
         println!("Execution time: {:.3} seconds", exec_elapsed);
         println!("Market orders per second: {:.0}", orders_per_second);
+        println!("Total orders per second: {:.0}", total_orders as f64 / elapsed.as_secs_f64());
         println!("Microseconds per market order: {:.2}", 1_000_000.0 / orders_per_second);
         if let Some(exhausted_secs) = exhausted_at {
             println!("Liquidity exhausted at {:.3} seconds", exhausted_secs);
