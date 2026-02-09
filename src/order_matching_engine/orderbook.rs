@@ -2,7 +2,7 @@
 
 use rust_decimal::prelude::*;
 use serde::{Serialize,Deserialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 
 #[derive(Debug,Serialize,Deserialize)]
 pub struct OrderBook {
@@ -179,7 +179,7 @@ impl Order {
 #[derive(Debug,Serialize,Deserialize)]
 pub struct Limit {
     price: Decimal,
-    orders: Vec<Order>,
+    orders: VecDeque<Order>,
     total_volume: f64,
 
 }
@@ -190,7 +190,7 @@ impl Limit {
         Limit{
             
             price,
-            orders: Vec::new(), 
+            orders: VecDeque::new(),
             total_volume,
         }}
     
@@ -201,38 +201,26 @@ impl Limit {
     pub fn total_volume(&self) -> f64 { self.total_volume}
 
     pub fn fill_order(&mut self, market_order: &mut Order) {
-        let mut delete_order: Vec<usize> = Vec::new();
-
-        for (n, limit_order) in self.orders.iter_mut().enumerate() {
-            match market_order.size  >= limit_order.size {
-                true => {
-                    market_order.size -= &limit_order.size;
-                    self.total_volume -= &limit_order.size;
-                    limit_order.size = 0.0;
-                    delete_order.push(n);
-
-
-                },
-                false => {
-                    limit_order.size -= market_order.size;
-                    self.total_volume -= market_order.size;
-                    market_order.size = 0.0;
-                }
+        while let Some(mut limit_order) = self.orders.pop_front() {
+            if market_order.size >= limit_order.size {
+                market_order.size -= limit_order.size;
+                self.total_volume -= limit_order.size;
+            } else {
+                limit_order.size -= market_order.size;
+                self.total_volume -= market_order.size;
+                market_order.size = 0.0;
+                self.orders.push_front(limit_order);
             }
 
             if market_order.is_filled() {
                 break;
-        }
-        }
-        for &index in delete_order.iter() {
-            self.orders.remove(index);
+            }
         }
     }
     pub fn add_order(&mut self, order: Order) {
-        self.orders.push(order);
+        self.orders.push_back(order);
         self.total_volume += order.size;
         
     }
 
 }
-
