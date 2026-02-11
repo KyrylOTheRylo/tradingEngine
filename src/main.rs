@@ -7,9 +7,9 @@ use order_matching_engine::orderbook::{Order,  OrderBook, BidOrAsk};
 use order_matching_engine::engine::{TradingPair, MatchEngine};
 
 
-#[post("/create_market_order/{base}_{quote}/{buy_or_sell}/{size}")]
+#[post("/create_market_order/{base}_{quote}/{buy_or_sell}/{size}/{user_id}")]
 async fn create_market_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
-    params: web::Path<(String, String, String, String)>) -> impl Responder {
+    params: web::Path<(String, String, String, String, String)>) -> impl Responder {
         let size_or_wrong: String = params.3.to_string();
         let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
         match size_or_wrong.parse::<f64>() {
@@ -18,9 +18,10 @@ async fn create_market_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
                     "buy"  => {
                         let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
                                 let mut order: Order  = Order::new(size, BidOrAsk::Bid);
+                                order.set_user_id(params.4.to_string());
                                 
-                                match engine.fill_market_order(pair, &mut order) {
-                                    Ok(answ) => {return HttpResponse::Ok().body(answ);},
+                                match engine.fill_market_order_with_response(&pair, &mut order) {
+                                    Ok(answ) => {return HttpResponse::Ok().json(answ);},
                                     Err(err) => {return HttpResponse::Ok().body(err)}
 
                                 }
@@ -28,9 +29,10 @@ async fn create_market_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
                     "sell" => {
                         let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
                                 let mut order: Order  = Order::new(size, BidOrAsk::Ask);
+                                order.set_user_id(params.4.to_string());
                                 
-                                match engine.fill_market_order(pair, &mut order) {
-                                    Ok(answ) => {return HttpResponse::Ok().body(answ);},
+                                match engine.fill_market_order_with_response(&pair, &mut order) {
+                                    Ok(answ) => {return HttpResponse::Ok().json(answ);},
                                     Err(err) => {return HttpResponse::Ok().body(err)}
                                     
                                 }
@@ -44,9 +46,9 @@ async fn create_market_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
             Err(_) => HttpResponse::Ok().body("Wrong price format")  }
     }
 
-#[post("/create_limit_order/{base}_{quote}/{buy_or_sell}/{price}/{size}")]
+#[post("/create_limit_order/{base}_{quote}/{buy_or_sell}/{price}/{size}/{user_id}")]
 async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
-    params: web::Path<(String, String, String, String, String)>) -> impl Responder {
+    params: web::Path<(String, String, String, String, String, String)>) -> impl Responder {
         let mut engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
         //let order: Order  = Order::new();
         let price_or_wrong: String = params.3.to_string();
@@ -59,24 +61,26 @@ async fn create_limit_order(data: web::Data<Arc<Mutex<MatchEngine>>>,
                         match params.2.as_str(){
                             "buy" => {
                                 let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
-                                let order: Order  = Order::new(size, BidOrAsk::Bid);
+                                let mut order: Order  = Order::new(size, BidOrAsk::Bid);
+                                order.set_user_id(params.5.to_string());
                                 
                                 
                                 
                                 
-                                match engine.place_limit_order(pair, price, order){
-                                    Ok(answ) => {return HttpResponse::Ok().body(answ);}
+                                match engine.place_limit_order_with_response(&pair, price, order){
+                                    Ok(answ) => {return HttpResponse::Ok().json(answ);}
                                     Err(error_msg) => {return HttpResponse::Ok().body(error_msg);}
                                 } 
                             },
                             "sell" => {
                                 let pair: TradingPair = TradingPair::new(params.0.to_string() , params.1.to_string());
-                                let order: Order  = Order::new(size, BidOrAsk::Ask);
+                                let mut order: Order  = Order::new(size, BidOrAsk::Ask);
+                                order.set_user_id(params.5.to_string());
                                 
                                 
                                 
-                                match engine.place_limit_order(pair, price, order){
-                                    Ok(answ) => {return HttpResponse::Ok().body(answ);}
+                                match engine.place_limit_order_with_response(&pair, price, order){
+                                    Ok(answ) => {return HttpResponse::Ok().json(answ);}
                                     Err(error_msg) => {return HttpResponse::Ok().body(error_msg);}
                                 } 
                             },
@@ -112,7 +116,7 @@ async fn get_limits_for_a_pair(data: web::Data<Arc<Mutex<MatchEngine>>>,
         let pair: TradingPair = TradingPair::new(params.0.to_string(), params.1.to_string());
     
     let engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
-    let order_book: Option<&OrderBook> = engine.get_limits_for_a_pair(pair);
+    let order_book: Option<&OrderBook> = engine.get_limits_for_a_pair(&pair);
 
     // Serialize OrderBook to JSON and then deserialize it back to create a deep copy
     match order_book {
@@ -124,6 +128,24 @@ async fn get_limits_for_a_pair(data: web::Data<Arc<Mutex<MatchEngine>>>,
             HttpResponse::Ok().json(cloned_order_book)
         }
     }
+    }
+
+#[get("/orders/{order_id}")]
+async fn get_order_status(data: web::Data<Arc<Mutex<MatchEngine>>>,
+    params: web::Path<u64>) -> impl Responder {
+        let engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
+        match engine.get_order(params.into_inner()) {
+            Some(order) => HttpResponse::Ok().json(order),
+            None => HttpResponse::NotFound().body("Order not found"),
+        }
+    }
+
+#[get("/users/{user_id}/orders")]
+async fn get_orders_for_user(data: web::Data<Arc<Mutex<MatchEngine>>>,
+    params: web::Path<String>) -> impl Responder {
+        let engine: std::sync::MutexGuard<'_, MatchEngine> = data.lock().unwrap();
+        let orders = engine.get_orders_for_user(params.as_str());
+        HttpResponse::Ok().json(orders)
     }
 
 
@@ -155,6 +177,8 @@ async fn main() -> std::io::Result<()> {
             .service(create_limit_order)
             .service(get_list_of_pairs)
             .service(get_limits_for_a_pair)
+            .service(get_order_status)
+            .service(get_orders_for_user)
             .service(echo)     
             .service(create_market_order)
             .route("/hey", web::get().to(manual_hello))

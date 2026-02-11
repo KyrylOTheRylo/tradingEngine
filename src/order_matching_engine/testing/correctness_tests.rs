@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod correctness_tests {
     use crate::order_matching_engine::orderbook::{Order, BidOrAsk};
-    use crate::order_matching_engine::engine::{TradingPair, MatchEngine};
+    use crate::order_matching_engine::engine::{TradingPair, MatchEngine, price_to_tick};
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
 
@@ -27,28 +27,28 @@ mod correctness_tests {
 
         // Add asks in non-sorted order
         let ask_11_3 = Order::new(40.0, BidOrAsk::Ask);
-        let _ = engine.place_limit_order(btc_usd.clone(), dec!(11.3), ask_11_3);
+        let _ = engine.place_limit_order(&btc_usd, dec!(11.3), ask_11_3);
 
         let ask_12_0 = Order::new(50.0, BidOrAsk::Ask);
-        let _ = engine.place_limit_order(btc_usd.clone(), dec!(12.0), ask_12_0);
+        let _ = engine.place_limit_order(&btc_usd, dec!(12.0), ask_12_0);
 
         let ask_11_0 = Order::new(1.0, BidOrAsk::Ask);
-        let _ = engine.place_limit_order(btc_usd.clone(), dec!(11.0), ask_11_0);
+        let _ = engine.place_limit_order(&btc_usd, dec!(11.0), ask_11_0);
 
         // Add bid
         let bid_10_0 = Order::new(100.0, BidOrAsk::Bid);
-        let _ = engine.place_limit_order(btc_usd.clone(), dec!(10.0), bid_10_0);
+        let _ = engine.place_limit_order(&btc_usd, dec!(10.0), bid_10_0);
 
         // Execute market buy for 5
         let mut market_buy = Order::new(5.0, BidOrAsk::Bid);
-        let _ = engine.fill_market_order(btc_usd.clone(), &mut market_buy);
+        let _ = engine.fill_market_order(&btc_usd, &mut market_buy);
 
         // Verify the market order was fully filled
         assert!(market_buy.is_filled(), "Market order should be fully filled");
         assert_eq!(market_buy.size(), 0.0, "Market order size should be 0 after filling");
 
         // Get the orderbook to check remaining orders
-        let orderbook = engine.get_limits_for_a_pair(btc_usd.clone()).unwrap();
+        let orderbook = engine.get_limits_for_a_pair(&btc_usd).unwrap();
 
         // Check asks: should have 11.0 gone (filled), 11.3 with 36.0 left, 12.0 with 50.0
         let ask_limits = orderbook.ask_limits();
@@ -61,11 +61,11 @@ mod correctness_tests {
         let mut ask_12_0_found = false;
 
         for limit in ask_limits {
-            if limit.price() == dec!(11.3) {
+            if limit.price() == price_to_tick(dec!(11.3)) {
                 ask_11_3_found = true;
                 assert_eq!(limit.total_volume(), 36.0, "11.3 ask should have 36.0 remaining (40 - 4)");
             }
-            if limit.price() == dec!(12.0) {
+            if limit.price() == price_to_tick(dec!(12.0)) {
                 ask_12_0_found = true;
                 assert_eq!(limit.total_volume(), 50.0, "12.0 ask should have 50.0 remaining");
             }
@@ -77,7 +77,7 @@ mod correctness_tests {
         // Check bids: should have bid 10.0 still at 100.0
         let bid_limits = orderbook.bid_limits();
         assert_eq!(bid_limits.len(), 1, "Should have 1 bid level");
-        assert_eq!(bid_limits[0].price(), dec!(10.0), "Bid should be at 10.0");
+        assert_eq!(bid_limits[0].price(), price_to_tick(dec!(10.0)), "Bid should be at 10.0");
         assert_eq!(bid_limits[0].total_volume(), 100.0, "Bid should still have 100.0");
     }
 
@@ -93,15 +93,15 @@ mod correctness_tests {
 
         for price in prices {
             let order = Order::new(10.0, BidOrAsk::Ask);
-            let _ = engine.place_limit_order(btc_usd.clone(), price, order);
+            let _ = engine.place_limit_order(&btc_usd, price, order);
         }
 
         // Get orderbook and verify ask order
-        let orderbook = engine.get_limits_for_a_pair(btc_usd).unwrap();
+        let orderbook = engine.get_limits_for_a_pair(&btc_usd).unwrap();
         let asks = orderbook.ask_limits();
 
         // Verify asks are sorted low to high
-        let mut last_price = Decimal::MIN;
+        let mut last_price = i64::MIN;
         for ask in asks {
             assert!(ask.price() >= last_price, "Asks should be sorted in ascending order");
             last_price = ask.price();
@@ -120,15 +120,15 @@ mod correctness_tests {
 
         for price in prices {
             let order = Order::new(10.0, BidOrAsk::Bid);
-            let _ = engine.place_limit_order(btc_usd.clone(), price, order);
+            let _ = engine.place_limit_order(&btc_usd, price, order);
         }
 
         // Get orderbook and verify bid order
-        let orderbook = engine.get_limits_for_a_pair(btc_usd).unwrap();
+        let orderbook = engine.get_limits_for_a_pair(&btc_usd).unwrap();
         let bids = orderbook.bid_limits();
 
         // Verify bids are sorted high to low
-        let mut last_price = Decimal::MAX;
+        let mut last_price = i64::MAX;
         for bid in bids {
             assert!(bid.price() <= last_price, "Bids should be sorted in descending order");
             last_price = bid.price();
@@ -145,7 +145,7 @@ mod correctness_tests {
         // Add asks: 100@10, 100@11, 100@12, 100@13
         for price in 10..=13 {
             let order = Order::new(100.0, BidOrAsk::Ask);
-            let _ = engine.place_limit_order(btc_usd.clone(), Decimal::from(price), order);
+            let _ = engine.place_limit_order(&btc_usd, Decimal::from(price), order);
         }
 
         // Market buy 250 - should fill:
@@ -153,11 +153,11 @@ mod correctness_tests {
         // 100 @ 11
         // 50 @ 12
         let mut market_buy = Order::new(250.0, BidOrAsk::Bid);
-        let _ = engine.fill_market_order(btc_usd.clone(), &mut market_buy);
+        let _ = engine.fill_market_order(&btc_usd, &mut market_buy);
 
         assert!(market_buy.is_filled(), "Market order should be fully filled");
 
-        let orderbook = engine.get_limits_for_a_pair(btc_usd).unwrap();
+        let orderbook = engine.get_limits_for_a_pair(&btc_usd).unwrap();
         let asks = orderbook.ask_limits();
 
         // Should have asks at 12 (50 left) and 13 (100 left)
@@ -167,11 +167,11 @@ mod correctness_tests {
         let mut ask_13_found = false;
 
         for ask in asks {
-            if ask.price() == Decimal::from(12) {
+            if ask.price() == price_to_tick(Decimal::from(12)) {
                 ask_12_found = true;
                 assert_eq!(ask.total_volume(), 50.0, "Ask at 12 should have 50.0 left");
             }
-            if ask.price() == Decimal::from(13) {
+            if ask.price() == price_to_tick(Decimal::from(13)) {
                 ask_13_found = true;
                 assert_eq!(ask.total_volume(), 100.0, "Ask at 13 should have 100.0 left");
             }
@@ -189,11 +189,11 @@ mod correctness_tests {
 
         // Add only 100 worth of asks
         let order = Order::new(100.0, BidOrAsk::Ask);
-        let _ = engine.place_limit_order(btc_usd.clone(), dec!(10.0), order);
+        let _ = engine.place_limit_order(&btc_usd, dec!(10.0), order);
 
         // Try to buy 200
         let mut market_buy = Order::new(200.0, BidOrAsk::Bid);
-        let result = engine.fill_market_order(btc_usd, &mut market_buy);
+        let result = engine.fill_market_order(&btc_usd, &mut market_buy);
 
         match result {
             Ok(msg) => {
